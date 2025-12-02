@@ -1,28 +1,39 @@
 import 'dart:typed_data';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:barcode/barcode.dart';
 
 class PdfService {
   static Future<Uint8List> buildInvoice(Map trx) async {
     final pdf = pw.Document();
     final List items = trx['items'] ?? [];
 
-    double total = 0;
+    // Hitung total dari item (USD)
+    double totalUsd = 0;
     for (var i in items) {
-      total += (i['price'] * i['qty']);
+      totalUsd += (i['price'] * i['qty']);
     }
 
-    final qrData = '''
-GLOBEMART-INVOICE
-ID: ${trx['trxId']}
-DATE: ${trx['date']}
-TOTAL: ${trx['total']}
-PAYMENT: ${trx['method']}
-ADDRESS: ${trx['address']}
-''';
+    // ==== FORMAT TOTAL SESUAI CURRENCY ====
+    String formatTotal() {
+      final String currency = trx['currency'] ?? "USD";
+      final double displayTotal =
+          (trx['displayTotal'] ?? totalUsd).toDouble();
+      final double rawUsd = (trx['totalUSD'] ?? totalUsd).toDouble();
 
-    final barcode = Barcode.qrCode();
-    final svg = barcode.toSvg(qrData, width: 180, height: 180);
+      switch (currency) {
+        case "IDR":
+          return "Rp ${displayTotal.toStringAsFixed(0)}";
+        case "JPY":
+          return "¥ ${displayTotal.toStringAsFixed(0)}";
+        case "EUR":
+          return "€ ${displayTotal.toStringAsFixed(2)}";
+        case "GBP":
+          return "£ ${displayTotal.toStringAsFixed(2)}";
+        default:
+          return "\$${rawUsd.toStringAsFixed(2)}";
+      }
+    }
+
+    final formattedTotal = formatTotal();
 
     pdf.addPage(
       pw.Page(
@@ -30,49 +41,100 @@ ADDRESS: ${trx['address']}
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-
+              // ===== HEADER =====
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text("GLOBEMART INVOICE",
-                      style: pw.TextStyle(
-                          fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                  pw.SvgImage(svg: svg),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        "GLOBEMART INVOICE",
+                        style: pw.TextStyle(
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text("Invoice ID : ${trx['trxId']}"),
+                    ],
+                  ),
+                  pw.Text(
+                    formattedTotal,
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
 
-              pw.SizedBox(height: 8),
+              pw.SizedBox(height: 12),
 
-              pw.Text("Invoice ID : ${trx['trxId']}"),
+              // ===== INFO DASAR =====
               pw.Text("Tanggal    : ${trx['date']}"),
               pw.Text("Metode     : ${trx['method']}"),
               pw.Text("Alamat     : ${trx['address']}"),
 
+              pw.SizedBox(height: 8),
               pw.Divider(),
 
-              pw.Text("DETAIL BARANG:",
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              // ===== DETAIL BARANG =====
+              pw.Text(
+                "DETAIL BARANG:",
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
               pw.SizedBox(height: 6),
 
               ...items.map((i) {
-                final sub = i['price'] * i['qty'];
-                return pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Expanded(child: pw.Text("${i['title']} x${i['qty']}")),
-                    pw.Text("\$${sub.toString()}"),
-                  ],
+                final title = i['title'] ?? '';
+                final qty = i['qty'] ?? 0;
+                final price = (i['price'] ?? 0).toDouble();
+                final sub = price * qty;
+
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 4),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Expanded(
+                        child: pw.Text("$title x$qty"),
+                      ),
+                      pw.Text("\$${sub.toStringAsFixed(2)}"),
+                    ],
+                  ),
                 );
               }).toList(),
 
               pw.Divider(),
 
-              pw.Text("TOTAL: \$${total.toStringAsFixed(2)}",
-                  style: pw.TextStyle(
-                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              // ===== TOTAL =====
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    "TOTAL",
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  pw.Text(
+                    formattedTotal,
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
 
-              pw.SizedBox(height: 12),
-              pw.Text("Scan QR untuk verifikasi transaksi."),
+              pw.SizedBox(height: 16),
+
+              pw.Text(
+                "Terima kasih telah berbelanja di GlobeMart.",
+                style: pw.TextStyle(fontSize: 10),
+              ),
             ],
           );
         },

@@ -23,6 +23,7 @@ class _ProfilePageState extends State<ProfilePage> {
   double totalSpend = 0;
   double growth = 0;
   String lastLocation = "-";
+  bool loading = true;
 
   String rupiah(double value) {
     final f = NumberFormat.currency(
@@ -39,41 +40,67 @@ class _ProfilePageState extends State<ProfilePage> {
     loadProfile();
   }
 
+  // ============================
+  // ✅ SAFE TOTAL READER
+  // ============================
+  double getTotalUsd(Map t) {
+    if (t['totalUSD'] != null && t['totalUSD'] is num) {
+      return (t['totalUSD'] as num).toDouble();
+    }
+
+    if (t['total'] != null && t['total'] is num) {
+      return (t['total'] as num).toDouble();
+    }
+
+    return 0;
+  }
+
+  // ============================
+  // ✅ LOAD PROFILE SAFELY
+  // ============================
   Future loadProfile() async {
     final user = HiveService.getSession();
     final raw = Hive.box('transaction').get(user) ?? [];
 
-    List<Map<String, dynamic>> trx = [];
-    for (var item in raw) {
-      trx.add(Map<String, dynamic>.from(item));
-    }
+    final List<Map<String, dynamic>> trx =
+        List<Map<String, dynamic>>.from(
+          raw.map((e) => Map<String, dynamic>.from(e)),
+        );
 
     totalTx = trx.length;
 
-    // ✅ AMBIL KURS
     final rates = await CurrencyService.getRates();
     final usdToIdr = rates['IDR'] ?? 16000;
 
-    // ✅ HITUNG TOTAL
-    double totalUsd = trx.fold(0.0,
-        (sum, t) => sum + (t['total'] as num).toDouble());
+    double totalUsd = 0;
+
+    for (var t in trx) {
+      totalUsd += getTotalUsd(t);
+    }
 
     totalSpend = totalUsd * usdToIdr;
 
-    // ✅ HITUNG KENAIKAN
     if (trx.isNotEmpty) {
-      double lastUsd = (trx.last['total'] as num).toDouble();
-      growth = lastUsd * usdToIdr;
+      growth = getTotalUsd(trx.last) * usdToIdr;
+    } else {
+      growth = 0;
     }
 
-    // ✅ AMBIL LOKASI (NAMA TEMPAT)
-    lastLocation = await LocationService.getAddress();
+    try {
+      lastLocation = await LocationService.getAddress();
+    } catch (_) {
+      lastLocation = "-";
+    }
 
     photoPath = Hive.box('profilePhoto').get(user);
-    setState(() {});
+    loading = false;
+
+    if (mounted) setState(() {});
   }
 
-  // ================= PHOTO =================
+  // ============================
+  // PHOTO PICKER
+  // ============================
   Future pickPhoto(ImageSource src) async {
     final file = await picker.pickImage(source: src, imageQuality: 75);
     if (file != null) {
@@ -133,13 +160,20 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ================= CARD =================
-  Widget stat(IconData icon, String title, String value,
-      {Color? color}) {
+  // ============================
+  // STAT CARD
+  // ============================
+  Widget stat(
+      {required IconData icon,
+      required String title,
+      required String value,
+      Color? color}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.08),
+        color: isDark ? const Color(0xFF1B1B2F) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(color: Colors.black26, blurRadius: 6),
@@ -148,17 +182,20 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color ?? Colors.white),
+          Icon(icon, color: color ?? Colors.indigo),
           const SizedBox(height: 8),
           Text(value,
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white)),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+              )),
           const SizedBox(height: 2),
           Text(title,
-              style:
-                  const TextStyle(color: Colors.white70, fontSize: 12)),
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black54,
+                fontSize: 12,
+              )),
         ],
       ),
     );
@@ -167,105 +204,120 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final user = HiveService.getSession() ?? "User";
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0F0F1A) : Colors.grey[100];
+    final card = isDark ? const Color(0xFF1B1B2F) : Colors.white;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bg,
       body: SafeArea(
-        child: ListView(
-          children: [
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                children: [
 
-            // ===== HEADER =====
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Column(children: [
-                GestureDetector(
-                  onTap: showPhotoOptions,
-                  child: CircleAvatar(
-                    radius: 45,
-                    backgroundColor: Colors.white,
-                    backgroundImage:
-                        photoPath == null
-                            ? null
-                            : FileImage(File(photoPath!)),
-                    child:
-                        photoPath == null ? const Icon(Icons.person) : null,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(user,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600)),
-                Text("@$user",
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 12)),
-              ]),
-            ),
-
-            // ===== DASHBOARD =====
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1B1B2F),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Column(children: [
-
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    children: [
-                      stat(Icons.receipt, "Total Transaksi", "$totalTx"),
-                      stat(Icons.shopping_bag, "Total Belanja",
-                          rupiah(totalSpend)),
-                      stat(Icons.trending_up, "Kenaikan",
-                          "+${rupiah(growth)}",
-                          color: Colors.greenAccent),
-                      stat(Icons.location_on, "Lokasi Terakhir",
-                          lastLocation),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Row(children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: loadProfile,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text("Refresh"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
+                  // ===== HEADER =====
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Column(children: [
+                      GestureDetector(
+                        onTap: showPhotoOptions,
+                        child: CircleAvatar(
+                          radius: 45,
+                          backgroundColor: Colors.grey,
+                          backgroundImage:
+                              photoPath == null ? null : FileImage(File(photoPath!)),
+                          child:
+                              photoPath == null ? const Icon(Icons.person) : null,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        onPressed: logout,
-                        child: const Text("Logout"),
-                      ),
-                    ),
-                  ])
+                      const SizedBox(height: 10),
+                      Text(user,
+                          style: TextStyle(
+                              fontSize: 18,
+                              color: isDark ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.w600)),
+                      Text("@$user",
+                          style: TextStyle(
+                              color:
+                                  isDark ? Colors.white70 : Colors.black45)),
+                    ]),
+                  ),
 
-                ]),
+                  // ===== DASHBOARD =====
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: card,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Column(children: [
+
+                        GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          children: [
+                            stat(
+                                icon: Icons.receipt,
+                                title: "Total Transaksi",
+                                value: "$totalTx"),
+                            stat(
+                                icon: Icons.shopping_bag,
+                                title: "Total Belanja",
+                                value: rupiah(totalSpend)),
+                            stat(
+                                icon: Icons.trending_up,
+                                title: "Kenaikan",
+                                value: "+${rupiah(growth)}",
+                                color: Colors.green),
+                            stat(
+                                icon: Icons.location_on,
+                                title: "Lokasi Terakhir",
+                                value: lastLocation),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        Row(children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: loadProfile,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text("Refresh"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.indigo,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(14)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.redAccent,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(14)),
+                              ),
+                              onPressed: logout,
+                              child: const Text("Logout"),
+                            ),
+                          ),
+                        ])
+
+                      ]),
+                    ),
+                  )
+                ],
               ),
-            )
-          ],
-        ),
       ),
     );
   }

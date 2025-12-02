@@ -72,31 +72,55 @@ class _UtilityPageState extends State<UtilityPage> {
     }
   }
 
-  Widget section(String title, Widget child) {
+  Widget section(BuildContext context, String title, Widget child) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E1E26) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6),
+        boxShadow: [
+          if (!isDark)
+            const BoxShadow(color: Colors.black12, blurRadius: 6),
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 15)),
+        Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 10),
         child,
       ]),
     );
   }
 
+  InputDecoration fieldDecoration(String label, IconData icon) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: isDark ? const Color(0xFF2A2A36) : Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor:
+          theme.brightness == Brightness.dark ? const Color(0xFF121212) : Colors.grey[100],
       appBar: AppBar(title: const Text("Utility Tools")),
       body: loading
           ? const Center(child: CircularProgressIndicator())
@@ -106,16 +130,15 @@ class _UtilityPageState extends State<UtilityPage> {
 
                 // ==== CURRENCY ====
                 section(
+                  context,
                   "Konversi Mata Uang",
                   Column(
                     children: [
                       TextField(
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: "Nilai USD",
-                          prefixIcon: Icon(Icons.attach_money),
-                          border: OutlineInputBorder(),
-                        ),
+                        style: theme.textTheme.bodyMedium,
+                        decoration:
+                            fieldDecoration("Nilai USD", Icons.attach_money),
                         onChanged: (v) {
                           usdValue = double.tryParse(v) ?? 0;
                           setState(() {});
@@ -128,21 +151,19 @@ class _UtilityPageState extends State<UtilityPage> {
                             .map((k) =>
                                 DropdownMenuItem(value: k, child: Text(k)))
                             .toList(),
-                        onChanged: (v) => setState(() => selectedCurrency = v!),
-                        decoration: const InputDecoration(
-                          labelText: "Tujuan",
-                          border: OutlineInputBorder(),
-                        ),
+                        onChanged: (v) =>
+                            setState(() => selectedCurrency = v!),
+                        decoration:
+                            fieldDecoration("Tujuan", Icons.public),
                       ),
                       const SizedBox(height: 12),
                       Align(
                         alignment: Alignment.centerRight,
                         child: Text(
                           convertedCurrency().toStringAsFixed(2),
-                          style: const TextStyle(
-                            fontSize: 22,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            color: Colors.indigoAccent,
                             fontWeight: FontWeight.bold,
-                            color: Colors.indigo,
                           ),
                         ),
                       )
@@ -152,65 +173,76 @@ class _UtilityPageState extends State<UtilityPage> {
 
                 // ==== TIME CONVERTER ====
                 section(
+                  context,
                   "Konversi Waktu",
-                  Column(children: [
-                    TextField(
-                      controller: timeC,
-                      keyboardType: TextInputType.datetime,
-                      decoration: const InputDecoration(
-                        hintText: "HH:mm",
-                        prefixIcon: Icon(Icons.access_time),
-                        border: OutlineInputBorder(),
+                  Column(
+                    children: [
+                      TextField(
+                        controller: timeC,
+                        keyboardType: TextInputType.datetime,
+                        style: theme.textTheme.bodyMedium,
+                        decoration:
+                            fieldDecoration("Format HH:mm", Icons.access_time),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: baseZone,
-                      decoration: const InputDecoration(
-                        labelText: "Zona Asal",
-                        border: OutlineInputBorder(),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: baseZone,
+                        decoration:
+                            fieldDecoration("Zona Asal", Icons.pin_drop),
+                        items: zoneOffset.keys
+                            .map((z) =>
+                                DropdownMenuItem(value: z, child: Text(z)))
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => baseZone = v!),
                       ),
-                      items: zoneOffset.keys
-                          .map((z) => DropdownMenuItem(value: z, child: Text(z)))
-                          .toList(),
-                      onChanged: (v) => setState(() => baseZone = v!),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.compare_arrows),
-                        label: const Text("Konversi"),
-                        onPressed: convertTime,
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.compare_arrows),
+                          label: const Text("Konversi"),
+                          onPressed: convertTime,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    converted.isEmpty
-                        ? const Text("Hasil akan tampil di bawah")
-                        : Column(
-                            children: converted.entries.map((e) {
-                              return ListTile(
-                                leading:
-                                    const Icon(Icons.access_time_filled),
-                                title: Text(e.key),
-                                trailing: Text(
-                                  e.value,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              );
-                            }).toList(),
-                          )
-                  ]),
+                      const SizedBox(height: 10),
+                      converted.isEmpty
+                          ? Text(
+                              "Hasil akan tampil di bawah",
+                              style: theme.textTheme.bodySmall,
+                            )
+                          : Column(
+                              children: converted.entries.map((e) {
+                                return ListTile(
+                                  leading:
+                                      const Icon(Icons.access_time_filled),
+                                  title: Text(e.key),
+                                  trailing: Text(
+                                    e.value,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                );
+                              }).toList(),
+                            )
+                    ],
+                  ),
                 ),
 
                 // ==== WORLD TIME ====
                 section(
+                  context,
                   "Waktu Dunia (Real API)",
                   Wrap(
                     spacing: 8,
                     children: worldTime.entries.map((e) {
-                      return Chip(label: Text("${e.key}: ${e.value}"));
+                      return Chip(
+                        label: Text("${e.key}: ${e.value}"),
+                        backgroundColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF2A2A36)
+                                : Colors.grey[200],
+                      );
                     }).toList(),
                   ),
                 ),

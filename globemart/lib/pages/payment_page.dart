@@ -8,9 +8,17 @@ import 'invoice_page.dart';
 
 class PaymentPage extends StatefulWidget {
   final String address;
-  final double total;
+  final double totalUSD;
+  final double displayTotal;
+  final String currency;
 
-  const PaymentPage({super.key, required this.address, required this.total});
+  const PaymentPage({
+    super.key,
+    required this.address,
+    required this.totalUSD,
+    required this.displayTotal,
+    required this.currency,
+  });
 
   @override
   State<PaymentPage> createState() => _PaymentPageState();
@@ -20,6 +28,21 @@ class _PaymentPageState extends State<PaymentPage> {
   String selectedMethod = "Bank Transfer";
   final methods = ["Bank Transfer", "QRIS", "E-Wallet"];
   final uuid = const Uuid();
+
+  String formatTotal() {
+    switch (widget.currency) {
+      case "IDR":
+        return "Rp ${widget.displayTotal.toStringAsFixed(0)}";
+      case "JPY":
+        return "¥ ${widget.displayTotal.toStringAsFixed(0)}";
+      case "EUR":
+        return "€ ${widget.displayTotal.toStringAsFixed(2)}";
+      case "GBP":
+        return "£ ${widget.displayTotal.toStringAsFixed(2)}";
+      default:
+        return "\$ ${widget.totalUSD.toStringAsFixed(2)}";
+    }
+  }
 
   Future processPayment() async {
     final user = HiveService.getSession();
@@ -32,18 +55,22 @@ class _PaymentPageState extends State<PaymentPage> {
     List history = trxBox.get(user) ?? [];
 
     final trx = {
-      "trxId": uuid.v4(), // ✅ ID UNIK
+      "trxId": uuid.v4(),
       "date": DateTime.now().toIso8601String(),
       "address": widget.address,
       "method": selectedMethod,
-      "total": widget.total,
+
+      // ✅ SIMPAN BENAR
+      "totalUSD": widget.totalUSD,
+      "displayTotal": widget.displayTotal,
+      "currency": widget.currency,
+
       "items": cartItems,
     };
 
     history.add(trx);
     trxBox.put(user, history);
 
-    // Clear cart
     cartBox.put(user, []);
 
     await LocalNotificationService.notifySuccess();
@@ -56,47 +83,43 @@ class _PaymentPageState extends State<PaymentPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1C1C28) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtitle = isDark ? Colors.white70 : Colors.black54;
+    final surface = isDark ? const Color(0xFF121212) : Colors.grey[100];
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: surface,
       appBar: AppBar(title: const Text("Pembayaran")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
 
-          // ADDRESS
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
-            ),
+          // ==== ADDRESS ====
+          _card(
+            cardColor,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Alamat Pengiriman",
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Text("Alamat Pengiriman",
+                    style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                 const SizedBox(height: 6),
-                Text(widget.address),
+                Text(widget.address, style: TextStyle(color: subtitle)),
               ],
             ),
           ),
 
           const SizedBox(height: 14),
 
-          // PAYMENT METHOD
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
-            ),
+          // ==== PAYMENT METHOD ====
+          _card(
+            cardColor,
             child: Column(
               children: methods.map((m) {
                 return RadioListTile(
-                  title: Text(m),
+                  activeColor: Colors.indigo,
+                  title: Text(m, style: TextStyle(color: textColor)),
                   value: m,
                   groupValue: selectedMethod,
                   onChanged: (v) => setState(() => selectedMethod = v!),
@@ -107,25 +130,28 @@ class _PaymentPageState extends State<PaymentPage> {
 
           const SizedBox(height: 14),
 
-          // TOTAL
+          // ==== TOTAL PAYMENT ====
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.indigo,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
               children: [
                 const Expanded(
-                  child: Text("Total Pembayaran",
-                      style: TextStyle(color: Colors.white70)),
+                  child: Text(
+                    "Total Pembayaran",
+                    style: TextStyle(color: Colors.white70),
+                  ),
                 ),
                 Text(
-                  "\$${widget.total.toStringAsFixed(2)}",
+                  formatTotal(),
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold),
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -133,6 +159,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
           const Spacer(),
 
+          // ==== PAY BUTTON ====
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -141,14 +168,31 @@ class _PaymentPageState extends State<PaymentPage> {
               onPressed: processPayment,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                elevation: 6,
               ),
             ),
           ),
         ]),
       ),
+    );
+  }
+
+  Widget _card(Color color, {required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 8),
+        ],
+      ),
+      child: child,
     );
   }
 }
