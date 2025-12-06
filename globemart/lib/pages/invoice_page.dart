@@ -22,7 +22,8 @@ ADDRESS: ${transaction['address']}
 
   String formatCurrency() {
     final currency = transaction['currency'] ?? "USD";
-    final rawUsd = (transaction['totalUSD'] ?? transaction['total'] ?? 0).toDouble();
+    final rawUsd =
+        (transaction['totalUSD'] ?? transaction['total'] ?? 0).toDouble();
     final display = (transaction['displayTotal'] ?? rawUsd).toDouble();
 
     switch (currency) {
@@ -48,7 +49,6 @@ ADDRESS: ${transaction['address']}
     final bg = isDark ? const Color(0xFF0F111A) : Colors.grey[100];
     final card = isDark ? const Color(0xFF1C1F2A) : Colors.white;
     final text = isDark ? Colors.white : Colors.black87;
-    final sub = isDark ? Colors.white70 : Colors.black54;
     final line = isDark ? Colors.white24 : Colors.black12;
 
     return Scaffold(
@@ -60,7 +60,6 @@ ADDRESS: ${transaction['address']}
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
-
           // ===== SUCCESS HEADER =====
           Container(
             width: double.infinity,
@@ -99,7 +98,6 @@ ADDRESS: ${transaction['address']}
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 info("ID", transaction['trxId'], text),
                 info("Tanggal", transaction['date'], text),
                 info("Alamat", transaction['address'], text),
@@ -173,8 +171,7 @@ ADDRESS: ${transaction['address']}
                   icon: const Icon(Icons.share),
                   label: const Text("Share PDF"),
                   onPressed: () async {
-                    final bytes =
-                        await PdfService.buildInvoice(transaction);
+                    final bytes = await PdfService.buildInvoice(transaction);
                     await Printing.sharePdf(
                       bytes: bytes,
                       filename: "invoice_${transaction['trxId']}.pdf",
